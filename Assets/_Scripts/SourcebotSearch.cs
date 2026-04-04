@@ -85,7 +85,7 @@ public class SourcebotSearch : MonoBehaviour
     private string apiKey;
 
     private void Awake() {
-        string path = Path.Combine(Application.dataPath, "..", "apikey.txt");
+        string path = Path.Combine(Application.dataPath, "apikey.txt");
         if (File.Exists(path)) {
             apiKey = File.ReadAllText(path).Trim();
         }
