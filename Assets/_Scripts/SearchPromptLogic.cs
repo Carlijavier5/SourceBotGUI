@@ -17,6 +17,7 @@ public class SearchPromptLogic : MonoBehaviour
     [SerializeField] private TMP_Dropdown sortByDropdown;
     [SerializeField] private TMP_Dropdown languagesDropdown;
     [SerializeField] private StructuralAnimate structuralAnimate;
+    [SerializeField] private int matches = 10000;
     
     private bool bypassEnter;
 
@@ -55,7 +56,7 @@ public class SearchPromptLogic : MonoBehaviour
 
         bool filterByLanguage = selectedLanguages.Count > 0 && selectedLanguages.Count < 6;
 
-        searchAPI.Search(searchQuery, 20, sortBy, (response) => {
+        searchAPI.Search(searchQuery, matches, sortBy, (response) => {
 
             List<SearchFile> results = filterByLanguage
                                      ? response.files.FindAll(f => selectedLanguages.Contains(f.language))

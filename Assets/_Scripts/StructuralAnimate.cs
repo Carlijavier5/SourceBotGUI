@@ -2,10 +2,13 @@ using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 
 public class StructuralAnimate : MonoBehaviour
 {
+    private const int PAGE_SIZE = 20;
+
     public event System.Action OnSearchAllowed;
 
     [SerializeField] private GraphicFader mainTitle;
@@ -21,6 +24,11 @@ public class StructuralAnimate : MonoBehaviour
     [SerializeField] private RepositoryButton repositoryButtonPrefab;
     [SerializeField] private ChunkCard chunkCardPrefab;
 
+    [SerializeField] private TextMeshProUGUI pageIndicatorText;
+    [SerializeField] private Button prevPageButton;
+    [SerializeField] private Button nextPageButton;
+    [SerializeField] private GameObject pageControlsRoot;
+
     private List<SearchFile> baseResults;
     private List<SearchFile> currentResults;
     private string currentFilter;
@@ -31,6 +39,21 @@ public class StructuralAnimate : MonoBehaviour
 
     private bool isInitialized;
     private bool areResultsReady;
+
+    private readonly List<ChunkRef> flatChunks = new();
+    private int currentPage;
+
+    public int TotalPages => Mathf.Max(1, Mathf.CeilToInt(flatChunks.Count / (float)PAGE_SIZE));
+
+    private struct ChunkRef {
+        public SearchFile file;
+        public Chunk chunk;
+
+        public ChunkRef(SearchFile file, Chunk chunk) {
+            this.file = file;
+            this.chunk = chunk;
+        }
+    }
 
     public void DoNextResult() {
         if (!isInitialized) {
@@ -47,6 +70,8 @@ public class StructuralAnimate : MonoBehaviour
         currentResults = new(results);
 
         currentFilter = string.Empty;
+        RebuildChunks();
+        currentPage = 0;
         areResultsReady = true;
     }
 
@@ -59,8 +84,30 @@ public class StructuralAnimate : MonoBehaviour
             currentFilter = repo;
         }
 
+        RebuildChunks();
+        currentPage = 0;
         DoNextResult();
         areResultsReady = true;
+    }
+
+    public void NextPage() {
+        if (!areResultsReady) return;
+        if (currentPage + 1 >= TotalPages) return;
+        currentPage++;
+        DoNextResult();
+        areResultsReady = true;
+        prevPageButton.interactable = false;
+        nextPageButton.interactable = false;
+    }
+
+    public void PrevPage() {
+        if (!areResultsReady) return;
+        if (currentPage <= 0) return;
+        currentPage--;
+        DoNextResult();
+        areResultsReady = true;
+        prevPageButton.interactable = false;
+        nextPageButton.interactable = false;
     }
 
     private IEnumerator IDoInitialSetup() {
@@ -97,23 +144,23 @@ public class StructuralAnimate : MonoBehaviour
             Destroy(chunkCards.Pop().gameObject);
         }
 
+        int start = currentPage * PAGE_SIZE;
+        int end = Mathf.Min(start + PAGE_SIZE, flatChunks.Count);
 
-        foreach (SearchFile file in currentResults) {
+        for (int i = start; i < end; i++) {
+            SearchFile file = flatChunks[i].file;
+            Chunk chunk = flatChunks[i].chunk;
 
             string filePath = file.fileName.text;
             string language = file.language;
             string url = file.externalWebUrl;
+            string code = chunk.content;
+            int lineNumber = chunk.contentStart.lineNumber;
+            string highlighted = SyntaxHighlighter.DoHighlight(code.Trim(), language);
 
-            foreach (Chunk chunk in file.chunks) {
-                string code = chunk.content;
-                int lineNumber = chunk.contentStart.lineNumber;
-                string highlighted = SyntaxHighlighter.DoHighlight(code.Trim(), language);
-
-                ChunkCard chunkCardInstance = Instantiate(chunkCardPrefab, codeContentAnchor);
-                chunkCardInstance.Setup(filePath, language, lineNumber, highlighted, url);
-                chunkCards.Push(chunkCardInstance);
-            }
-            
+            ChunkCard chunkCardInstance = Instantiate(chunkCardPrefab, codeContentAnchor);
+            chunkCardInstance.Setup(filePath, language, lineNumber, highlighted, url);
+            chunkCards.Push(chunkCardInstance);
         }
 
         availableRepos.Clear();
@@ -139,6 +186,24 @@ public class StructuralAnimate : MonoBehaviour
             title.gameObject.SetActive(availableRepos.Count <= 0);
         }
 
+        UpdatePageControls();
+
         OnSearchAllowed?.Invoke();
+    }
+
+    private void RebuildChunks() {
+        flatChunks.Clear();
+        foreach (SearchFile file in currentResults) {
+            foreach (Chunk chunk in file.chunks) {
+                flatChunks.Add(new ChunkRef(file, chunk));
+            }
+        }
+    }
+
+    private void UpdatePageControls() {
+        pageIndicatorText.text = $"{currentPage + 1} / {TotalPages}";
+        prevPageButton.interactable = currentPage > 0;
+        nextPageButton.interactable = (currentPage + 1) < TotalPages;
+        pageControlsRoot.SetActive(flatChunks.Count > 0);
     }
 }
